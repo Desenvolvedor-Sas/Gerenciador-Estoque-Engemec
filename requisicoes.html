@@ -67,6 +67,7 @@
             <option value="">Todos os status</option>
             <option value="pendente">Pendente</option>
             <option value="aprovada">Aprovada</option>
+            <option value="reprovada">Reprovada</option>
             <option value="em_atendimento">Em Atendimento</option>
             <option value="concluida">Concluída</option>
             <option value="cancelada">Cancelada</option>
@@ -196,6 +197,27 @@
   </div>
 </div>
 
+<!-- MODAL: REPROVAR REQUISIÇÃO -->
+<div class="modal-overlay" id="modal-reject-req">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title">Reprovar Requisição</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-reject-req')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Informe o motivo da reprovação. O solicitante poderá visualizar esta justificativa.</p>
+      <div class="form-group">
+        <label>Justificativa <span style="color:var(--color-danger)">*</span></label>
+        <textarea id="reject-req-reason" class="form-control" rows="4" placeholder="Descreva o motivo da reprovação..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-reject-req')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmRejectRequisition()"><i class="fas fa-times-circle"></i> Confirmar Reprovação</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: QR SCANNER -->
 <div class="modal-overlay" id="modal-scanner">
   <div class="modal modal-sm">
@@ -225,6 +247,7 @@
   let reqItems = [];
   let currentReqPage = 1;
   const reqPerPage = 12;
+  let _rejectingReqId = null;
 
   DB.init().then(async () => {
     session = Auth.requireAuth();
@@ -283,6 +306,39 @@
     UI.renderPagination(document.getElementById('req-pagination'), currentReqPage, paginated.totalPages,
       (p) => { currentReqPage = p; renderReqList(); }
     );
+  }
+
+  /* === REPROVAR REQUISIÇÃO === */
+  function rejectRequisition(id) {
+    if (!Auth.isAdmin()) {
+      UI.notify('Apenas Administradores podem reprovar requisições.', 'error');
+      return;
+    }
+    _rejectingReqId = id;
+    document.getElementById('reject-req-reason').value = '';
+    UI.closeModal('modal-view-req');
+    UI.openModal('modal-reject-req');
+  }
+
+  function confirmRejectRequisition() {
+    const reason = document.getElementById('reject-req-reason').value.trim();
+    if (!reason) { UI.notify('Informe a justificativa da reprovação.', 'warning'); return; }
+
+    const req = DB.getRequisition(_rejectingReqId);
+    if (!req) return;
+
+    req.status = 'reprovada';
+    req.rejectedBy = session.userId;
+    req.rejectedByName = session.userName;
+    req.rejectedAt = new Date().toISOString();
+    req.rejectionReason = reason;
+    DB.saveRequisition(req);
+    DB.addLog('ACTION', session.userId, session.userName, `Reprovou requisição ${req.code}: ${reason}`);
+    UI.notify(`Requisição ${req.code} reprovada.`, 'warning');
+    UI.closeModal('modal-reject-req');
+    _rejectingReqId = null;
+    renderReqList();
+    UI.renderSidebar('requisicoes');
   }
 
   /* === APROVAR REQUISIÇÃO === */
@@ -502,6 +558,7 @@
             <div><span style="color:var(--text-muted)">Status: </span>${Utils.reqStatusBadge(req.status)}</div>
             ${req.observation ? `<div><span style="color:var(--text-muted)">Obs: </span>${Utils.esc(req.observation)}</div>` : ''}
             ${req.approvedByName ? `<div><span style="color:var(--text-muted)">Aprovado por: </span><strong>${Utils.esc(req.approvedByName)}</strong> em ${Utils.formatDateTime(req.approvedAt)}</div>` : ''}
+            ${req.rejectedByName ? `<div style="background:var(--color-danger-dim,rgba(239,68,68,.12));border-radius:6px;padding:8px 10px;margin-top:4px"><span style="color:var(--color-danger)"><i class="fas fa-times-circle"></i> Reprovado por </span><strong>${Utils.esc(req.rejectedByName)}</strong> em ${Utils.formatDateTime(req.rejectedAt)}<br><span style="color:var(--text-muted)">Motivo: </span><em>${Utils.esc(req.rejectionReason || '')}</em></div>` : ''}
             ${req.attendedByName ? `<div><span style="color:var(--text-muted)">Atendido por: </span>${Utils.esc(req.attendedByName)}</div>` : ''}
           </div>
         </div>
@@ -523,9 +580,10 @@
       footer.innerHTML = `
         <button class="btn btn-ghost" onclick="UI.closeModal('modal-view-req')">Fechar</button>
         <button class="btn btn-danger btn-sm" onclick="cancelReq('${req.id}');UI.closeModal('modal-view-req')">Cancelar Req.</button>
-        ${Auth.isAdmin() ? `<button class="btn btn-success" onclick="approveRequisition('${req.id}')">
-          <i class="fas fa-check"></i> Aprovar Requisição
-        </button>` : '<span style="font-size:12px;color:var(--text-muted);align-self:center">Aguardando aprovação de um Administrador</span>'}`;
+        ${Auth.isAdmin() ? `
+          <button class="btn btn-danger btn-sm" onclick="rejectRequisition('${req.id}')"><i class="fas fa-times-circle"></i> Reprovar</button>
+          <button class="btn btn-success" onclick="approveRequisition('${req.id}')"><i class="fas fa-check"></i> Aprovar</button>
+        ` : '<span style="font-size:12px;color:var(--text-muted);align-self:center">Aguardando aprovação de um Administrador</span>'}`;
     } else if (req.status === 'aprovada') {
       footer.innerHTML = `
         <button class="btn btn-ghost" onclick="UI.closeModal('modal-view-req')">Fechar</button>

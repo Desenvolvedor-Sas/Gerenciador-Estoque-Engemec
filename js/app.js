@@ -16,6 +16,8 @@ const UI = {
     const stats = DB.getStats();
     const pendingBadge = stats.pendingRequisitions > 0
       ? `<span class="badge">${stats.pendingRequisitions}</span>` : '';
+    const pendingPurchaseBadge = stats.pendingPurchaseOrders > 0
+      ? `<span class="badge">${stats.pendingPurchaseOrders}</span>` : '';
 
     const sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
@@ -29,6 +31,7 @@ const UI = {
         { href: 'saida.html', icon: 'fa-circle-arrow-up', label: 'Saída', page: 'saida' },
       ] : []),
       { href: 'requisicoes.html', icon: 'fa-clipboard-list', label: 'Requisições', page: 'requisicoes', badge: pendingBadge },
+      { href: 'compras.html', icon: 'fa-cart-shopping', label: 'Pedidos de Compra', page: 'compras', badge: pendingPurchaseBadge },
       ...(!isUser ? [
         { href: 'ferramentas.html', icon: 'fa-wrench', label: 'Ferramentas', page: 'ferramentas' },
       ] : []),

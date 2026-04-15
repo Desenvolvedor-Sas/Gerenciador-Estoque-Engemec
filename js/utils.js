@@ -266,11 +266,24 @@ const Utils = {
   /* ---------- REQUISITION STATUS ---------- */
   reqStatusBadge(status) {
     const map = {
-      'pendente': '<span class="badge badge-warning">Pendente</span>',
-      'aprovada': '<span class="badge badge-info" style="background:var(--color-info,#0891b2);color:#fff">Aprovada</span>',
+      'pendente':       '<span class="badge badge-warning">Pendente</span>',
+      'aprovada':       '<span class="badge" style="background:#0891b2;color:#fff">Aprovada</span>',
+      'reprovada':      '<span class="badge badge-danger">Reprovada</span>',
       'em_atendimento': '<span class="badge badge-primary">Em Atendimento</span>',
-      'concluida': '<span class="badge badge-success">Concluída</span>',
-      'cancelada': '<span class="badge badge-muted">Cancelada</span>',
+      'concluida':      '<span class="badge badge-success">Concluída</span>',
+      'cancelada':      '<span class="badge badge-muted">Cancelada</span>',
+    };
+    return map[status] || `<span class="badge badge-muted">${status}</span>`;
+  },
+
+  purchaseStatusBadge(status) {
+    const map = {
+      'pendente':   '<span class="badge badge-warning">Pendente</span>',
+      'aprovada':   '<span class="badge" style="background:#0891b2;color:#fff">Aprovada</span>',
+      'reprovada':  '<span class="badge badge-danger">Reprovada</span>',
+      'em_compra':  '<span class="badge badge-primary">Em Compra</span>',
+      'concluida':  '<span class="badge badge-success">Concluída</span>',
+      'cancelada':  '<span class="badge badge-muted">Cancelada</span>',
     };
     return map[status] || `<span class="badge badge-muted">${status}</span>`;
   },

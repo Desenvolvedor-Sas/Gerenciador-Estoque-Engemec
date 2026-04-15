@@ -6,6 +6,7 @@ const ASSETS = [
   'entrada.html',
   'saida.html',
   'requisicoes.html',
+  'compras.html',
   'ferramentas.html',
   'historico.html',
   'usuarios.html',

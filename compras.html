@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pedidos de Compra | Gestão de Estoque</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+      <div class="topbar-title"><i class="fas fa-cart-shopping"></i> Pedidos de Compra</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary" onclick="openNewPurchaseModal()">
+          <i class="fas fa-plus"></i> Novo Pedido
+        </button>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <!-- FILTROS -->
+      <div class="filters-bar" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+        <div class="search-input" style="position:relative;flex:1;max-width:300px">
+          <i class="fas fa-search"></i>
+          <input type="text" id="search-purchases" class="form-control" placeholder="Buscar por código ou solicitante..." oninput="renderPurchaseList()">
+        </div>
+        <select class="form-control" id="filter-purchase-status" onchange="renderPurchaseList()" style="max-width:160px">
+          <option value="">Todos os status</option>
+          <option value="pendente">Pendente</option>
+          <option value="aprovada">Aprovada</option>
+          <option value="reprovada">Reprovada</option>
+          <option value="em_compra">Em Compra</option>
+          <option value="concluida">Concluída</option>
+          <option value="cancelada">Cancelada</option>
+        </select>
+      </div>
+
+      <!-- LISTA -->
+      <div class="card">
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Solicitante</th>
+                <th>Itens</th>
+                <th>Justificativa</th>
+                <th>Status</th>
+                <th>Data</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="purchase-list-body">
+              <tr><td colspan="7" class="text-center text-muted">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="purchase-pagination"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- MODAL: NOVO/EDITAR PEDIDO -->
+<div class="modal-overlay" id="modal-purchase-form">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="purchase-form-title">Novo Pedido de Compra</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-purchase-form')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="form-group">
+          <label>Fornecedor (opcional)</label>
+          <input type="text" id="purchase-supplier" class="form-control" placeholder="Nome do fornecedor">
+        </div>
+        <div class="form-group">
+          <label>Justificativa <span style="color:var(--color-danger)">*</span></label>
+          <input type="text" id="purchase-justificativa" class="form-control" placeholder="Por que esta compra é necessária?">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observações</label>
+        <textarea id="purchase-obs" class="form-control" rows="2" placeholder="Informações adicionais..."></textarea>
+      </div>
+
+      <!-- ADICIONAR ITENS -->
+      <div style="border:1px solid var(--border-color);border-radius:8px;padding:14px;margin-bottom:12px">
+        <div style="font-weight:600;margin-bottom:10px;color:var(--text-primary)"><i class="fas fa-boxes-stacked"></i> Itens do Pedido</div>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px">
+          <div class="form-group" style="margin:0">
+            <label>Produto / Item</label>
+            <input type="text" id="purchase-item-name" class="form-control" placeholder="Nome do produto" list="purchase-products-list">
+            <datalist id="purchase-products-list"></datalist>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Quantidade</label>
+            <input type="number" id="purchase-item-qty" class="form-control" placeholder="0" min="1" value="1">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label>Unidade</label>
+            <input type="text" id="purchase-item-unit" class="form-control" placeholder="un, kg, m..." value="un">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="addPurchaseItem()" style="height:38px"><i class="fas fa-plus"></i></button>
+        </div>
+        <div id="purchase-items-list">
+          <p style="color:var(--text-muted);font-size:13px;text-align:center;padding:10px 0">Nenhum item adicionado.</p>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-purchase-form')">Cancelar</button>
+      <button class="btn btn-primary" onclick="savePurchaseOrder()"><i class="fas fa-save"></i> Salvar Pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: VISUALIZAR PEDIDO -->
+<div class="modal-overlay" id="modal-view-purchase">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="view-purchase-title">Pedido de Compra</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-view-purchase')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="view-purchase-body"></div>
+    <div class="modal-footer" id="view-purchase-footer"></div>
+  </div>
+</div>
+
+<!-- MODAL: REPROVAR PEDIDO -->
+<div class="modal-overlay" id="modal-reject-purchase">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title">Reprovar Pedido de Compra</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-reject-purchase')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Informe o motivo da reprovação.</p>
+      <div class="form-group">
+        <label>Justificativa <span style="color:var(--color-danger)">*</span></label>
+        <textarea id="reject-purchase-reason" class="form-control" rows="4" placeholder="Descreva o motivo da reprovação..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-reject-purchase')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmRejectPurchase()"><i class="fas fa-times-circle"></i> Confirmar Reprovação</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let session;
+  let purchaseFormItems = [];
+  let currentPurchasePage = 1;
+  const purchasePerPage = 12;
+  let _rejectingPurchaseId = null;
+
+  DB.init().then(() => {
+    session = Auth.requireAuth();
+    if (!session) return;
+    UI.renderSidebar('compras');
+    UI.initSidebarToggle();
+    renderPurchaseList();
+    populateProductsDatalist();
+  });
+
+  function populateProductsDatalist() {
+    const list = document.getElementById('purchase-products-list');
+    const products = DB.getProducts();
+    list.innerHTML = products.map(p => `<option value="${Utils.esc(p.name)}" data-unit="${p.unit || 'un'}">`).join('');
+  }
+
+  /* === LISTA === */
+  function renderPurchaseList() {
+    const search = (document.getElementById('search-purchases')?.value || '').toLowerCase();
+    const statusFilter = document.getElementById('filter-purchase-status')?.value || '';
+    let orders = DB.getPurchaseOrders();
+
+    if (search) orders = orders.filter(o =>
+      o.code?.toLowerCase().includes(search) ||
+      o.requesterName?.toLowerCase().includes(search) ||
+      o.supplier?.toLowerCase().includes(search)
+    );
+    if (statusFilter) orders = orders.filter(o => o.status === statusFilter);
+
+    orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const total = orders.length;
+    const totalPages = Math.max(1, Math.ceil(total / purchasePerPage));
+    if (currentPurchasePage > totalPages) currentPurchasePage = 1;
+    const slice = orders.slice((currentPurchasePage - 1) * purchasePerPage, currentPurchasePage * purchasePerPage);
+
+    const tbody = document.getElementById('purchase-list-body');
+    if (!slice.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:32px">Nenhum pedido encontrado.</td></tr>`;
+    } else {
+      tbody.innerHTML = slice.map(o => `
+        <tr>
+          <td><strong>${Utils.esc(o.code)}</strong></td>
+          <td>${Utils.esc(o.requesterName)}</td>
+          <td>${(o.items || []).length} item(ns)</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${Utils.esc(o.justificativa || '')}">${Utils.esc(o.justificativa || '-')}</td>
+          <td>${Utils.purchaseStatusBadge(o.status)}</td>
+          <td>${Utils.formatDate(o.createdAt)}</td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm btn-icon" onclick="viewPurchaseOrder('${o.id}')" data-tooltip="Ver detalhes"><i class="fas fa-eye"></i></button>
+              ${o.status === 'pendente' && Auth.isAdmin() ? `<button class="btn btn-success btn-sm" onclick="approvePurchaseOrder('${o.id}')"><i class="fas fa-check"></i> Aprovar</button>` : ''}
+              ${o.status === 'aprovada' ? `<button class="btn btn-primary btn-sm" onclick="startPurchase('${o.id}')"><i class="fas fa-shopping-cart"></i> Iniciar Compra</button>` : ''}
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('purchase-pagination').innerHTML =
+      UI.renderPagination(total, currentPurchasePage, purchasePerPage, p => { currentPurchasePage = p; renderPurchaseList(); });
+  }
+
+  /* === NOVO PEDIDO === */
+  function openNewPurchaseModal() {
+    purchaseFormItems = [];
+    document.getElementById('purchase-supplier').value = '';
+    document.getElementById('purchase-justificativa').value = '';
+    document.getElementById('purchase-obs').value = '';
+    document.getElementById('purchase-item-name').value = '';
+    document.getElementById('purchase-item-qty').value = '1';
+    document.getElementById('purchase-item-unit').value = 'un';
+    renderPurchaseFormItems();
+    document.getElementById('purchase-form-title').textContent = 'Novo Pedido de Compra';
+    UI.openModal('modal-purchase-form');
+  }
+
+  function addPurchaseItem() {
+    const name = document.getElementById('purchase-item-name').value.trim();
+    const qty = parseInt(document.getElementById('purchase-item-qty').value) || 1;
+    const unit = document.getElementById('purchase-item-unit').value.trim() || 'un';
+    if (!name) { UI.notify('Informe o nome do item.', 'warning'); return; }
+
+    const product = DB.getProducts().find(p => p.name.toLowerCase() === name.toLowerCase());
+    purchaseFormItems.push({
+      productId: product?.id || null,
+      productCode: product?.code || '',
+      productName: name,
+      quantity: qty,
+      unit: unit,
+    });
+
+    document.getElementById('purchase-item-name').value = '';
+    document.getElementById('purchase-item-qty').value = '1';
+    renderPurchaseFormItems();
+  }
+
+  function removePurchaseItem(idx) {
+    purchaseFormItems.splice(idx, 1);
+    renderPurchaseFormItems();
+  }
+
+  function renderPurchaseFormItems() {
+    const el = document.getElementById('purchase-items-list');
+    if (!purchaseFormItems.length) {
+      el.innerHTML = `<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:10px 0">Nenhum item adicionado.</p>`;
+      return;
+    }
+    el.innerHTML = `<table class="table" style="font-size:13px">
+      <thead><tr><th>Item</th><th>Qtd</th><th>Un.</th><th></th></tr></thead>
+      <tbody>${purchaseFormItems.map((it, i) => `
+        <tr>
+          <td>${Utils.esc(it.productName)}</td>
+          <td>${it.quantity}</td>
+          <td>${Utils.esc(it.unit)}</td>
+          <td><button class="btn btn-ghost btn-sm btn-icon" onclick="removePurchaseItem(${i})"><i class="fas fa-trash"></i></button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  function savePurchaseOrder() {
+    const justificativa = document.getElementById('purchase-justificativa').value.trim();
+    if (!justificativa) { UI.notify('Informe a justificativa do pedido.', 'warning'); return; }
+    if (!purchaseFormItems.length) { UI.notify('Adicione pelo menos um item.', 'warning'); return; }
+
+    const order = {
+      requesterId: session.userId,
+      requesterName: session.userName,
+      supplier: document.getElementById('purchase-supplier').value.trim(),
+      justificativa,
+      observation: document.getElementById('purchase-obs').value.trim(),
+      items: purchaseFormItems,
+    };
+
+    DB.createPurchaseOrder(order);
+    DB.addLog('ACTION', session.userId, session.userName, `Criou pedido de compra ${order.code}`);
+    UI.notify(`Pedido ${order.code} criado com sucesso!`, 'success');
+    UI.closeModal('modal-purchase-form');
+    renderPurchaseList();
+    UI.renderSidebar('compras');
+  }
+
+  /* === VISUALIZAR === */
+  function viewPurchaseOrder(id) {
+    const o = DB.getPurchaseOrder(id);
+    if (!o) return;
+
+    document.getElementById('view-purchase-title').textContent = `Pedido ${o.code}`;
+    document.getElementById('view-purchase-body').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:14px">
+          <div><span style="color:var(--text-muted)">Código: </span><strong>${Utils.esc(o.code)}</strong></div>
+          <div><span style="color:var(--text-muted)">Solicitante: </span>${Utils.esc(o.requesterName)}</div>
+          <div><span style="color:var(--text-muted)">Fornecedor: </span>${Utils.esc(o.supplier || '-')}</div>
+          <div><span style="color:var(--text-muted)">Data: </span>${Utils.formatDateTime(o.createdAt)}</div>
+          <div><span style="color:var(--text-muted)">Status: </span>${Utils.purchaseStatusBadge(o.status)}</div>
+          <div><span style="color:var(--text-muted)">Justificativa: </span>${Utils.esc(o.justificativa || '-')}</div>
+          ${o.observation ? `<div><span style="color:var(--text-muted)">Obs: </span>${Utils.esc(o.observation)}</div>` : ''}
+          ${o.approvedByName ? `<div><span style="color:var(--text-muted)">Aprovado por: </span><strong>${Utils.esc(o.approvedByName)}</strong> em ${Utils.formatDateTime(o.approvedAt)}</div>` : ''}
+          ${o.rejectedByName ? `<div style="background:rgba(239,68,68,.1);border-radius:6px;padding:8px 10px"><span style="color:var(--color-danger)"><i class="fas fa-times-circle"></i> Reprovado por </span><strong>${Utils.esc(o.rejectedByName)}</strong> em ${Utils.formatDateTime(o.rejectedAt)}<br><span style="color:var(--text-muted)">Motivo: </span><em>${Utils.esc(o.rejectionReason || '')}</em></div>` : ''}
+          ${o.purchasedByName ? `<div><span style="color:var(--text-muted)">Comprado por: </span><strong>${Utils.esc(o.purchasedByName)}</strong> em ${Utils.formatDateTime(o.purchasedAt)}</div>` : ''}
+          ${o.completedByName ? `<div><span style="color:var(--text-muted)">Concluído por: </span><strong>${Utils.esc(o.completedByName)}</strong> em ${Utils.formatDateTime(o.completedAt)}</div>` : ''}
+        </div>
+        <div>
+          <div style="font-weight:600;margin-bottom:8px">Itens do Pedido</div>
+          <table class="table" style="font-size:13px">
+            <thead><tr><th>Item</th><th>Qtd</th><th>Un.</th></tr></thead>
+            <tbody>${(o.items || []).map(it => `
+              <tr><td>${Utils.esc(it.productName)}</td><td>${it.quantity}</td><td>${Utils.esc(it.unit)}</td></tr>
+            `).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    const footer = document.getElementById('view-purchase-footer');
+    if (o.status === 'pendente') {
+      footer.innerHTML = `
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-view-purchase')">Fechar</button>
+        <button class="btn btn-ghost btn-sm" onclick="cancelPurchaseOrder('${o.id}')">Cancelar Pedido</button>
+        ${Auth.isAdmin() ? `
+          <button class="btn btn-danger btn-sm" onclick="rejectPurchaseOrder('${o.id}')"><i class="fas fa-times-circle"></i> Reprovar</button>
+          <button class="btn btn-success" onclick="approvePurchaseOrder('${o.id}')"><i class="fas fa-check"></i> Aprovar</button>
+        ` : '<span style="font-size:12px;color:var(--text-muted);align-self:center">Aguardando aprovação de um Administrador</span>'}
+      `;
+    } else if (o.status === 'aprovada') {
+      footer.innerHTML = `
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-view-purchase')">Fechar</button>
+        <button class="btn btn-primary" onclick="startPurchase('${o.id}')"><i class="fas fa-shopping-cart"></i> Iniciar Compra</button>
+      `;
+    } else if (o.status === 'em_compra') {
+      footer.innerHTML = `
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-view-purchase')">Fechar</button>
+        <button class="btn btn-success" onclick="completePurchase('${o.id}')"><i class="fas fa-check-double"></i> Marcar como Concluído</button>
+      `;
+    } else {
+      footer.innerHTML = `<button class="btn btn-ghost" onclick="UI.closeModal('modal-view-purchase')">Fechar</button>`;
+    }
+
+    UI.openModal('modal-view-purchase');
+  }
+
+  /* === APROVAR === */
+  async function approvePurchaseOrder(id) {
+    if (!Auth.isAdmin()) { UI.notify('Apenas Administradores podem aprovar pedidos.', 'error'); return; }
+    const o = DB.getPurchaseOrder(id);
+    if (!o || o.status !== 'pendente') return;
+    const ok = await UI.confirm(`Aprovar o pedido ${o.code}?`, 'Confirmar Aprovação');
+    if (!ok) return;
+    o.status = 'aprovada';
+    o.approvedBy = session.userId;
+    o.approvedByName = session.userName;
+    o.approvedAt = new Date().toISOString();
+    DB.savePurchaseOrder(o);
+    DB.addLog('ACTION', session.userId, session.userName, `Aprovou pedido de compra ${o.code}`);
+    UI.notify(`Pedido ${o.code} aprovado!`, 'success');
+    UI.closeModal('modal-view-purchase');
+    renderPurchaseList();
+    UI.renderSidebar('compras');
+  }
+
+  /* === REPROVAR === */
+  function rejectPurchaseOrder(id) {
+    if (!Auth.isAdmin()) { UI.notify('Apenas Administradores podem reprovar pedidos.', 'error'); return; }
+    _rejectingPurchaseId = id;
+    document.getElementById('reject-purchase-reason').value = '';
+    UI.closeModal('modal-view-purchase');
+    UI.openModal('modal-reject-purchase');
+  }
+
+  function confirmRejectPurchase() {
+    const reason = document.getElementById('reject-purchase-reason').value.trim();
+    if (!reason) { UI.notify('Informe a justificativa.', 'warning'); return; }
+    const o = DB.getPurchaseOrder(_rejectingPurchaseId);
+    if (!o) return;
+    o.status = 'reprovada';
+    o.rejectedBy = session.userId;
+    o.rejectedByName = session.userName;
+    o.rejectedAt = new Date().toISOString();
+    o.rejectionReason = reason;
+    DB.savePurchaseOrder(o);
+    DB.addLog('ACTION', session.userId, session.userName, `Reprovou pedido de compra ${o.code}: ${reason}`);
+    UI.notify(`Pedido ${o.code} reprovado.`, 'warning');
+    UI.closeModal('modal-reject-purchase');
+    _rejectingPurchaseId = null;
+    renderPurchaseList();
+    UI.renderSidebar('compras');
+  }
+
+  /* === INICIAR COMPRA === */
+  async function startPurchase(id) {
+    const o = DB.getPurchaseOrder(id);
+    if (!o || o.status !== 'aprovada') return;
+    const ok = await UI.confirm(`Iniciar a compra do pedido ${o.code}?`, 'Iniciar Compra');
+    if (!ok) return;
+    o.status = 'em_compra';
+    o.purchasedBy = session.userId;
+    o.purchasedByName = session.userName;
+    o.purchasedAt = new Date().toISOString();
+    DB.savePurchaseOrder(o);
+    DB.addLog('ACTION', session.userId, session.userName, `Iniciou compra do pedido ${o.code}`);
+    UI.notify(`Pedido ${o.code} em andamento.`, 'success');
+    UI.closeModal('modal-view-purchase');
+    renderPurchaseList();
+  }
+
+  /* === CONCLUIR === */
+  async function completePurchase(id) {
+    const o = DB.getPurchaseOrder(id);
+    if (!o || o.status !== 'em_compra') return;
+    const ok = await UI.confirm(`Marcar o pedido ${o.code} como concluído?`, 'Concluir Pedido');
+    if (!ok) return;
+    o.status = 'concluida';
+    o.completedBy = session.userId;
+    o.completedByName = session.userName;
+    o.completedAt = new Date().toISOString();
+    DB.savePurchaseOrder(o);
+    DB.addLog('ACTION', session.userId, session.userName, `Concluiu pedido de compra ${o.code}`);
+    UI.notify(`Pedido ${o.code} concluído!`, 'success');
+    UI.closeModal('modal-view-purchase');
+    renderPurchaseList();
+  }
+
+  /* === CANCELAR === */
+  async function cancelPurchaseOrder(id) {
+    const o = DB.getPurchaseOrder(id);
+    if (!o) return;
+    const ok = await UI.confirm(`Cancelar o pedido ${o.code}?`, 'Cancelar Pedido');
+    if (!ok) return;
+    o.status = 'cancelada';
+    DB.savePurchaseOrder(o);
+    DB.addLog('ACTION', session.userId, session.userName, `Cancelou pedido de compra ${o.code}`);
+    UI.notify(`Pedido ${o.code} cancelado.`, 'info');
+    UI.closeModal('modal-view-purchase');
+    renderPurchaseList();
+    UI.renderSidebar('compras');
+  }
+</script>
+</body>
+</html>

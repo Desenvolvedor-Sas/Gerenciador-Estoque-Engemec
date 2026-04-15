@@ -19,6 +19,7 @@ const DB = {
     SETTINGS: 'ce_settings',
     SESSION: 'ce_session',
     LOGIN_ATTEMPTS: 'ce_login_attempts',
+    PURCHASE_ORDERS: 'ce_purchase_orders',
   },
 
   _db: null,
@@ -393,6 +394,7 @@ const DB = {
           product: products.length,
           req: reqs.length,
           tool: tools.length,
+          purchase: 0,
         };
         this.set(this.KEYS.SETTINGS, settings);
       }
@@ -711,6 +713,37 @@ const DB = {
     this.set(this.KEYS.BACKUPS, backups);
   },
 
+  /* ---------- PURCHASE ORDERS ---------- */
+  getPurchaseOrders() { return this.get(this.KEYS.PURCHASE_ORDERS) || []; },
+  getPurchaseOrder(id) { return this.getPurchaseOrders().find(p => p.id === id); },
+  getPurchaseOrderByCode(code) { return this.getPurchaseOrders().find(p => p.code === code); },
+
+  savePurchaseOrder(order) {
+    const orders = this.getPurchaseOrders();
+    const idx = orders.findIndex(o => o.id === order.id);
+    if (idx >= 0) orders[idx] = order;
+    else orders.unshift(order);
+    this.set(this.KEYS.PURCHASE_ORDERS, orders);
+    return order;
+  },
+
+  createPurchaseOrder(order) {
+    order.id = this._uuid();
+    order.code = this._purchaseOrderCode();
+    order.createdAt = new Date().toISOString();
+    order.status = 'pendente';
+    return this.savePurchaseOrder(order);
+  },
+
+  deletePurchaseOrder(id) {
+    const orders = this.getPurchaseOrders().filter(o => o.id !== id);
+    this.set(this.KEYS.PURCHASE_ORDERS, orders);
+  },
+
+  _purchaseOrderCode() {
+    return `PC-${String(this._nextCounter('purchase')).padStart(4, '0')}`;
+  },
+
   /* ---------- SETTINGS ---------- */
   getSettings() { return this.get(this.KEYS.SETTINGS) || {}; },
 
@@ -850,12 +883,14 @@ const DB = {
     const movements = this.getMovements();
     const requisitions = this.getRequisitions();
     const tools = this.getTools();
+    const purchaseOrders = this.getPurchaseOrders();
 
     return {
       totalProducts: products.length,
       totalStock: products.reduce((s, p) => s + (p.quantity || 0), 0),
       lowStock: products.filter(p => p.quantity <= p.minStock).length,
       pendingRequisitions: requisitions.filter(r => r.status === 'pendente').length,
+      pendingPurchaseOrders: purchaseOrders.filter(o => o.status === 'pendente').length,
       toolsBorrowed: tools.filter(t => t.status === 'emprestado').length,
       recentMovements: movements.slice(0, 10),
       movementsToday: movements.filter(m => {
