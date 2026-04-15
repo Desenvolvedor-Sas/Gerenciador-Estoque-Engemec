@@ -56,11 +56,7 @@ const UI = {
 
     sidebar.innerHTML = `
       <div class="sidebar-logo">
-        <div class="sidebar-logo-icon"><i class="fas fa-warehouse"></i></div>
-        <div class="sidebar-logo-text">
-          <h1>Controle de Estoque</h1>
-          <span>Gestão de Almoxarifado</span>
-        </div>
+        <img src="icons/logo-engemec.png" alt="Engemec" style="width:120px;height:auto;object-fit:contain;margin:0 auto;display:block">
       </div>
       <nav class="sidebar-nav">
         <div class="sidebar-section">Principal</div>
