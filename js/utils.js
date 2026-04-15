@@ -267,6 +267,7 @@ const Utils = {
   reqStatusBadge(status) {
     const map = {
       'pendente': '<span class="badge badge-warning">Pendente</span>',
+      'aprovada': '<span class="badge badge-info" style="background:var(--color-info,#0891b2);color:#fff">Aprovada</span>',
       'em_atendimento': '<span class="badge badge-primary">Em Atendimento</span>',
       'concluida': '<span class="badge badge-success">Concluída</span>',
       'cancelada': '<span class="badge badge-muted">Cancelada</span>',

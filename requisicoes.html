@@ -66,6 +66,7 @@
           <select class="form-control" id="filter-req-status" onchange="renderReqList()" style="max-width:160px">
             <option value="">Todos os status</option>
             <option value="pendente">Pendente</option>
+            <option value="aprovada">Aprovada</option>
             <option value="em_atendimento">Em Atendimento</option>
             <option value="concluida">Concluída</option>
             <option value="cancelada">Cancelada</option>
@@ -270,7 +271,8 @@
           <td>
             <div style="display:flex;gap:6px">
               <button class="btn btn-ghost btn-sm btn-icon" onclick="viewRequisition('${r.id}')" data-tooltip="Ver detalhes"><i class="fas fa-eye"></i></button>
-              ${r.status === 'pendente' ? `<button class="btn btn-primary btn-sm" onclick="attendRequisition('${r.id}')"><i class="fas fa-clipboard-check"></i> Atender</button>` : ''}
+              ${r.status === 'pendente' && Auth.isAdmin() ? `<button class="btn btn-success btn-sm" onclick="approveRequisition('${r.id}')"><i class="fas fa-check"></i> Aprovar</button>` : ''}
+              ${r.status === 'aprovada' ? `<button class="btn btn-primary btn-sm" onclick="attendRequisition('${r.id}')"><i class="fas fa-clipboard-check"></i> Atender</button>` : ''}
               ${r.status === 'pendente' ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="cancelReq('${r.id}')" data-tooltip="Cancelar"><i class="fas fa-ban"></i></button>` : ''}
             </div>
           </td>
@@ -281,6 +283,34 @@
     UI.renderPagination(document.getElementById('req-pagination'), currentReqPage, paginated.totalPages,
       (p) => { currentReqPage = p; renderReqList(); }
     );
+  }
+
+  /* === APROVAR REQUISIÇÃO === */
+  async function approveRequisition(id) {
+    if (!Auth.isAdmin()) {
+      UI.notify('Apenas Administradores podem aprovar requisições.', 'error');
+      return;
+    }
+    const req = DB.getRequisition(id);
+    if (!req) return;
+    if (req.status !== 'pendente') {
+      UI.notify('Apenas requisições pendentes podem ser aprovadas.', 'warning');
+      return;
+    }
+
+    const ok = await UI.confirm(`Aprovar a requisição ${req.code}?`, 'Confirmar Aprovação');
+    if (!ok) return;
+
+    req.status = 'aprovada';
+    req.approvedBy = session.userId;
+    req.approvedByName = session.userName;
+    req.approvedAt = new Date().toISOString();
+    DB.saveRequisition(req);
+    DB.addLog('ACTION', session.userId, session.userName, `Aprovou requisição ${req.code}`);
+    UI.notify(`Requisição ${req.code} aprovada!`, 'success');
+    UI.closeModal('modal-view-req');
+    renderReqList();
+    UI.renderSidebar('requisicoes');
   }
 
   /* === NOVA REQUISIÇÃO === */
@@ -471,7 +501,8 @@
             <div><span style="color:var(--text-muted)">Data: </span>${Utils.formatDateTime(req.createdAt)}</div>
             <div><span style="color:var(--text-muted)">Status: </span>${Utils.reqStatusBadge(req.status)}</div>
             ${req.observation ? `<div><span style="color:var(--text-muted)">Obs: </span>${Utils.esc(req.observation)}</div>` : ''}
-            ${req.attendedBy ? `<div><span style="color:var(--text-muted)">Atendido por: </span>${Utils.esc(req.attendedByName || '')}</div>` : ''}
+            ${req.approvedByName ? `<div><span style="color:var(--text-muted)">Aprovado por: </span><strong>${Utils.esc(req.approvedByName)}</strong> em ${Utils.formatDateTime(req.approvedAt)}</div>` : ''}
+            ${req.attendedByName ? `<div><span style="color:var(--text-muted)">Atendido por: </span>${Utils.esc(req.attendedByName)}</div>` : ''}
           </div>
         </div>
         <div style="text-align:center">
@@ -492,6 +523,12 @@
       footer.innerHTML = `
         <button class="btn btn-ghost" onclick="UI.closeModal('modal-view-req')">Fechar</button>
         <button class="btn btn-danger btn-sm" onclick="cancelReq('${req.id}');UI.closeModal('modal-view-req')">Cancelar Req.</button>
+        ${Auth.isAdmin() ? `<button class="btn btn-success" onclick="approveRequisition('${req.id}')">
+          <i class="fas fa-check"></i> Aprovar Requisição
+        </button>` : '<span style="font-size:12px;color:var(--text-muted);align-self:center">Aguardando aprovação de um Administrador</span>'}`;
+    } else if (req.status === 'aprovada') {
+      footer.innerHTML = `
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-view-req')">Fechar</button>
         <button class="btn btn-primary" onclick="UI.closeModal('modal-view-req');attendRequisition('${req.id}')">
           <i class="fas fa-clipboard-check"></i> Iniciar Atendimento
         </button>`;
@@ -530,6 +567,16 @@
     }
 
     if (req.status === 'pendente') {
+      UI.notify('Esta requisição ainda não foi aprovada por um Administrador.', 'warning');
+      return;
+    }
+
+    if (req.status === 'cancelada') {
+      UI.notify('Esta requisição foi cancelada.', 'error');
+      return;
+    }
+
+    if (req.status === 'aprovada') {
       req.status = 'em_atendimento';
       req.attendedBy = session.userId;
       req.attendedByName = session.userName;
