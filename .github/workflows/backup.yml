@@ -2,8 +2,8 @@ name: Backup Automático Firebase
 
 on:
   schedule:
-    - cron: '0 3 * * *'   # Todo dia às 03:00 (horário UTC = meia-noite de Brasília)
-  workflow_dispatch:        # Permite rodar manualmente pelo GitHub
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
   backup:
@@ -12,25 +12,53 @@ jobs:
     steps:
       - name: Checkout do repositório
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Baixar dados do Firebase
         run: |
           mkdir -p backups
           DATE=$(date '+%Y-%m-%d')
-          curl -s "${{ secrets.FIREBASE_DB_URL }}/store.json?auth=${{ secrets.FIREBASE_DB_SECRET }}" \
-            -o "backups/backup-${DATE}.json"
-          echo "Backup salvo: backups/backup-${DATE}.json"
+          DB_URL="https://gerenciamento-de-estoque-4a92b-default-rtdb.firebaseio.com/store.json"
+
+          if [ -n "${{ secrets.FIREBASE_DB_SECRET }}" ]; then
+            RESPONSE=$(curl -s -w "\n%{http_code}" "${DB_URL}?auth=${{ secrets.FIREBASE_DB_SECRET }}")
+          else
+            RESPONSE=$(curl -s -w "\n%{http_code}" "${DB_URL}")
+          fi
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "HTTP Status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Erro ao acessar Firebase. Status: $HTTP_CODE"
+            echo "Resposta: $BODY"
+            exit 1
+          fi
+
+          echo "$BODY" > "backups/backup-${DATE}.json"
+          echo "Backup salvo: backups/backup-${DATE}.json ($(wc -c < "backups/backup-${DATE}.json") bytes)"
 
       - name: Manter apenas os últimos 30 backups
         run: |
           cd backups
-          ls -t backup-*.json | tail -n +31 | xargs -r rm --
-          echo "Limpeza concluída"
+          COUNT=$(ls backup-*.json 2>/dev/null | wc -l)
+          echo "Total de backups: $COUNT"
+          if [ "$COUNT" -gt 30 ]; then
+            ls -t backup-*.json | tail -n +31 | xargs rm --
+            echo "Backups antigos removidos"
+          fi
 
       - name: Commit e push do backup
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add backups/
-          git diff --staged --quiet || git commit -m "backup: $(date '+%Y-%m-%d')"
-          git push
+          if git diff --staged --quiet; then
+            echo "Nenhuma alteração para commitar"
+          else
+            git commit -m "backup: $(date '+%Y-%m-%d')"
+            git push
+          fi
